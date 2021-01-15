@@ -1,0 +1,1 @@
+vRealize Automation Satstack Config Example
