@@ -1,0 +1,10 @@
+reactor:
+  - 'salt/auth':
+    - salt://apjdemo/accept-key.sls
+
+  - 'salt/minion/*/start':
+  # - salt://apjdemo/test.sls
+    - salt://apjdemo/opencart.sls
+
+  - 'salt/beacon/*/inotify//var/www/opencart/index.php':
+    - salt://apjdemo/fix_opencart.sls 

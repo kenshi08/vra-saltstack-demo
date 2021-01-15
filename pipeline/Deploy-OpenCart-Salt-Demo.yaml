@@ -1,0 +1,170 @@
+---
+project: McCree
+kind: PIPELINE
+name: Deploy-OpenCart-Salt-Demo
+enabled: true
+concurrency: 10
+input:
+  deployment: ''
+  machine-name: ''
+  os: ubuntu1804
+_inputMeta:
+  os:
+    mandatory: true
+    description: Operating System
+  deployment:
+    mandatory: true
+    description: Deployment Name
+  machine-name:
+    mandatory: true
+    description: Machine Name
+workspace:
+  endpoint: ''
+  image: ''
+  registry: ''
+  path: ''
+  autoCloneForTrigger: false
+  limits:
+    cpu: 1.0
+    memory: 512
+stageOrder:
+- Deploy OpenCart
+- Hackery Stage
+- Cleanup after demo
+stages:
+  Cleanup after demo:
+    taskOrder:
+    - Show Hacked site and then Salt Fix it
+    - Clean up demo
+    - Remove Key From Master
+    tasks:
+      Clean up demo:
+        type: Blueprint
+        input:
+          action: DeleteDeployment
+          deploymentName: ${input.deployment}-Deployment
+      Show Hacked site and then Salt Fix it:
+        type: UserOperation
+        input:
+          approvers:
+          - clementwong@vmware.com
+          approverGroups: [
+            ]
+          summary: Show Hack n Fix
+          description: Show the Hacked Site and then Salt Fixing it
+          sendemail: false
+          expiration: 3
+          expirationUnit: DAYS
+          pipelineName: ${name}
+          cancelPreviousPendingUserOp: false
+      Remove Key From Master:
+        type: SSH
+        endpoints:
+          agent: neetcloud-agent
+        input:
+          script: salt-key -d oc-salt-${input.machine-name} -y
+          username: ${var.Salt-Username}
+          password: ${var.Salt-Password}
+          passphrase: ''
+          privatekey: ''
+          host: ${var.Salt-URL}
+          workingDirectory: ''
+          arguments: [
+            ]
+          environmentVariables: {
+            }
+          continueOnCommandFailure: 'false'
+  Deploy OpenCart:
+    taskOrder:
+    - Deploy Base Ubuntu
+    - Change Hostname and minion
+    tasks:
+      Change Hostname and minion:
+        type: SSH
+        endpoints:
+          agent: neetcloud-agent
+        input:
+          script: |-
+            sudo hostnamectl set-hostname oc-salt-${input.machine-name}
+
+            curl -L https://bootstrap.saltstack.com -o install_salt.sh
+            sudo sh install_salt.sh -A ${var.Salt-URL}
+          username: apjdemo
+          password: ${var.Usual-Password}
+          passphrase: ''
+          privatekey: ''
+          host: ${Deploy OpenCart.Deploy Base Ubuntu.output.deploymentDetails.resources.oc-salt.address}
+          workingDirectory: ''
+          arguments: [
+            ]
+          environmentVariables: {
+            }
+          continueOnCommandFailure: false
+      Deploy Base Ubuntu:
+        type: Blueprint
+        input:
+          action: CreateDeployment
+          deploymentName: ${input.deployment}-Deployment
+          blueprint: Salt-Demo-Template
+          version: '1.2'
+          parameters:
+            hostname: ${input.machine-name}
+            os: ${input.os}
+  Hackery Stage:
+    taskOrder:
+    - Wait for Salt portion of Demo
+    - Perform Hack
+    tasks:
+      Wait for Salt portion of Demo:
+        type: UserOperation
+        input:
+          approvers:
+          - clementwong@vmware.com
+          approverGroups: [
+            ]
+          summary: Waiting before running hack
+          description: Approve to run hack
+          sendemail: false
+          expiration: 3
+          expirationUnit: DAYS
+          pipelineName: ${name}
+          cancelPreviousPendingUserOp: false
+      Perform Hack:
+        type: SSH
+        endpoints:
+          agent: neetcloud-agent
+        input:
+          script: |-
+            sudo cp /var/www/opencart/index.php index-old.php
+            sudo rm /var/www/opencart/index.php
+
+            sudo tee /var/www/opencart/index.php > /dev/null << EOF
+            <html>
+             <head>
+              <title>CMBU Hacked Ya</title>
+              <style>
+              h1 {text-align: center;}
+              p {text-align: center;}
+              div {text-align: center;}
+              </style>
+             </head>
+             <body>
+             <?php echo '<div><p><font size="+10">We Just Hacked You!!!</font></p></div>'; ?></br>
+             <div><img src="https://www.prosellus.com/wp-content/uploads/2017/08/hacked4.png" alt="Hacity Hack"></div> </br></br>
+             <div><img src="https://images.squarespace-cdn.com/content/v1/58d53b3a1b10e3b25f427435/1545013898426-RW2TRDLIFOEIFZUAE1ER/ke17ZwdGBToddI8pDm48kAyNv2CSPqyyUeVNpnwHEMNZw-zPPgdn4jUwVcJE1ZvWEtT5uBSRWt4vQZAgTJucoTqqXjS3CfNDSuuf31e0tVEMhD7LPKbaKI1jx80-emCknOdcXe8jaXNj5w8Ucyg7P5u3E9Ef3XsXP1C_826c-iU/sasons.gif" alt="Seasons"></div>
+             </body>
+            </html>
+            EOF
+
+            sudo systemctl restart apache2
+          username: apjdemo
+          password: ${var.Usual-Password}
+          passphrase: ''
+          privatekey: ''
+          host: ${Deploy OpenCart.Deploy Base Ubuntu.output.deploymentDetails.resources.oc-salt.address}
+          workingDirectory: ''
+          arguments: [
+            ]
+          environmentVariables: {
+            }
+          continueOnCommandFailure: 'false'

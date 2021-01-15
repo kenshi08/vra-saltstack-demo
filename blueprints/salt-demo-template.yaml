@@ -1,0 +1,38 @@
+formatVersion: 1
+name: salt-demo-template
+version: 1.0
+inputs:
+  hostname:
+    type: string
+  os:
+    type: string
+    default: ubuntu1804
+    enum:
+      - ubuntu1804
+      - centos7
+resources:
+  oc-salt:
+    type: Cloud.Machine
+    properties:
+      image: '${input.os}'
+      flavor: medium
+      networks:
+        - network: '${resource["salt-net"].id}'
+          assignment: static
+      constraints:
+        - tag: 'platform:vsphere'
+        - tag: 'env:prod'
+      cloudConfig: |
+        #cloud-config
+        #log all cloud-init process output (info & errors) to a logfile
+        output: {all: ">> /var/log/cloud-init-output.log"}
+
+        runcmd:
+          - sudo systemctl stop apt-daily.service
+          - sudo systemctl stop apt-daily-upgrade.service
+  salt-net:
+    type: Cloud.Network
+    properties:
+      networkType: existing
+      constraints:
+        - tag: 'function:mgmt'
